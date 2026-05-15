@@ -1,0 +1,11 @@
+# Env (local secrets)
+.env
+.env.local
+.env.*.local
+
+# OS / editor
+.DS_Store
+*.swp
+
+# Traefik runtime state
+traefik/acme/acme.json

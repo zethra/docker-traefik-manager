@@ -1,0 +1,40 @@
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+
+api:
+  dashboard: true
+  insecure: false
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+providers:
+  http:
+    endpoint: "http://app:3000/api/traefik/config"
+    pollInterval: "10s"
+
+# Secrets are wired in via environment variables on the traefik container
+# (see docker-compose.yml). Static config does not template env vars on
+# its own.
+#
+#  TRAEFIK_PROVIDERS_HTTP_HEADERS_AUTHORIZATION=Bearer ${TRAEFIK_PROVIDER_TOKEN}
+#
+# Certificate resolvers via env (one block per provider). The Domain UI
+# only lists resolvers named in TRAEFIK_CERT_RESOLVERS, so keep these in
+# sync.
+#
+#  # technitium / RFC2136
+#  TRAEFIK_CERTIFICATESRESOLVERS_TECHNITIUM_ACME_EMAIL=${ACME_EMAIL}
+#  TRAEFIK_CERTIFICATESRESOLVERS_TECHNITIUM_ACME_STORAGE=/etc/traefik/acme/acme.json
+#  TRAEFIK_CERTIFICATESRESOLVERS_TECHNITIUM_ACME_DNSCHALLENGE_PROVIDER=rfc2136
+#  RFC2136_NAMESERVER=...
+#  RFC2136_TSIG_KEY=...
+#  RFC2136_TSIG_SECRET=...
+#  RFC2136_TSIG_ALGORITHM=hmac-sha256

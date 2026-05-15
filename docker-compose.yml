@@ -1,0 +1,85 @@
+services:
+  traefik:
+    image: traefik:v3.3
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/acme:/etc/traefik/acme
+    environment:
+      # ── HTTP provider auth ────────────────────────────────────────
+      TRAEFIK_PROVIDERS_HTTP_HEADERS_AUTHORIZATION: "Bearer ${TRAEFIK_PROVIDER_TOKEN}"
+
+      # ── Cert resolvers (declare every name in TRAEFIK_CERT_RESOLVERS) ──
+      TRAEFIK_CERTIFICATESRESOLVERS_TECHNITIUM_ACME_EMAIL: "${ACME_EMAIL}"
+      TRAEFIK_CERTIFICATESRESOLVERS_TECHNITIUM_ACME_STORAGE: "/etc/traefik/acme/acme.json"
+      TRAEFIK_CERTIFICATESRESOLVERS_TECHNITIUM_ACME_DNSCHALLENGE_PROVIDER: "rfc2136"
+
+      # ── RFC2136 (Technitium) credentials (read by lego) ───────────
+      RFC2136_NAMESERVER: "${RFC2136_NAMESERVER}"
+      RFC2136_TSIG_KEY: "${RFC2136_TSIG_KEY}"
+      RFC2136_TSIG_SECRET: "${RFC2136_TSIG_SECRET}"
+      RFC2136_TSIG_ALGORITHM: "${RFC2136_TSIG_ALGORITHM:-hmac-sha256.}"
+    networks:
+      - web
+    depends_on:
+      app:
+        condition: service_started
+
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: traefik-manager-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}"
+      AUTH_SECRET: "${AUTH_SECRET}"
+      AUTH_URL: "${AUTH_URL}"
+      TRAEFIK_PROVIDER_TOKEN: "${TRAEFIK_PROVIDER_TOKEN}"
+      TRAEFIK_CERT_RESOLVERS: "${TRAEFIK_CERT_RESOLVERS:-technitium}"
+      ADMIN_EMAIL: "${ADMIN_EMAIL}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD}"
+    networks:
+      - web
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      # Optional: expose this admin UI through Traefik itself.
+      traefik.enable: "true"
+      traefik.http.routers.manager.rule: "Host(`${MANAGER_HOST}`)"
+      traefik.http.routers.manager.entrypoints: "websecure"
+      traefik.http.routers.manager.tls.certresolver: "technitium"
+      traefik.http.routers.manager.tls.domains[0].main: "${MANAGER_DOMAIN}"
+      traefik.http.routers.manager.tls.domains[0].sans: "*.${MANAGER_DOMAIN}"
+      traefik.http.services.manager.loadbalancer.server.port: "3000"
+
+  db:
+    image: postgres:16-alpine
+    container_name: traefik-manager-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB}"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - web
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+networks:
+  web:
+    driver: bridge
+
+volumes:
+  db-data:

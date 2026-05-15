@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model Domain {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  certResolver String
+  wildcard     Boolean  @default(true)
+  hosts        Host[]
+  createdAt    DateTime @default(now())
+}
+
+model Host {
+  id          String           @id @default(cuid())
+  subdomain   String
+  fqdn        String           @unique
+  domain      Domain           @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  domainId    String
+  enabled     Boolean          @default(true)
+  endpoints   Endpoint[]
+  middlewares HostMiddleware[]
+  createdAt   DateTime         @default(now())
+
+  @@unique([domainId, subdomain])
+}
+
+model Endpoint {
+  id              String   @id @default(cuid())
+  host            Host     @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  hostId          String
+  address         String
+  port            Int
+  scheme          Scheme   @default(HTTP)
+  isPrimary       Boolean  @default(false)
+  healthCheckPath String   @default("/")
+  createdAt       DateTime @default(now())
+
+  @@index([hostId])
+}
+
+enum Scheme {
+  HTTP
+  HTTPS
+}
+
+model Middleware {
+  id        String           @id @default(cuid())
+  name      String           @unique
+  type      MiddlewareType
+  config    Json
+  hosts     HostMiddleware[]
+  createdAt DateTime         @default(now())
+}
+
+enum MiddlewareType {
+  IP_WHITELIST
+  BASIC_AUTH
+  RATE_LIMIT
+  HEADERS
+  STRIP_PREFIX
+  REDIRECT_REGEX
+  COMPRESS
+}
+
+model HostMiddleware {
+  host         Host       @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  hostId       String
+  middleware   Middleware @relation(fields: [middlewareId], references: [id], onDelete: Cascade)
+  middlewareId String
+  order        Int
+
+  @@id([hostId, middlewareId])
+  @@index([hostId, order])
+}
+
+model ConfigVersion {
+  id        Int      @id @default(1)
+  version   Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
